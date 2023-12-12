@@ -126,11 +126,11 @@ def read(srcPath, targetPath):
         pairs.append([srcList[i], targetList[i]])
     return srcLang, targetLang, pairs
 
-# 处理语言对 - 中间函数
+# 处理单条语言对
 def filterPair(p):
     return len(p[0].split(' ')) < MAX_LENGTH and p[0].startswith(EN_PREFIX)
 
-# 处理语言对 - 入口函数
+# 处理多条语言对
 def filterPairs(pairs):
     # 过滤长度超过限制的句子
     return [pair for pair in pairs if filterPair(pair)]
@@ -144,7 +144,7 @@ def prepareData(srcPath, targetPath):
         targetLang.addSentence(pair[1])
     return srcLang, targetLang, pairs
 
-# 获取模型输入所需要的张量 - 中间函数
+# 获取单个模型输入所需要的张量
 def tensorFromSentence(lang, sentence, languageName):
     if languageName == 'en':
         indexes = [lang.word2index[word] for word in sentence.split(' ')]
@@ -152,7 +152,7 @@ def tensorFromSentence(lang, sentence, languageName):
         indexes = [lang.word2index[word] for word in jieba.cut(sentence)]
     return torch.tensor(indexes, dtype=torch.long).view(-1, 1)
 
-# 获取模型输入所需要的张量 - 入口函数
+# 获取pair输入所需要的张量
 def tensorsFromPair(srcLang, targetLang, pair):
     return tensorFromSentence(srcLang, pair[0], 'en'), tensorFromSentence(targetLang, pair[1], 'zh_cn')
 
@@ -422,10 +422,6 @@ def timeSince(since):
     # 返回指定格式的耗时
     return '%dm %ds' % (m, s)
 
-# since = time.time() - 10 * 60
-# period = timeSince(since)
-# print(period)
-
 # ----------------------------- 构建模型训练函数, 并进行训练 END -----------------------------
 
 
@@ -456,7 +452,7 @@ def trainIters(srcLang, targetLang, encoder, decoder, nIters, printEvery=1000, p
     encoderOptimizer = optim.SGD(encoder.parameters(), lr=learningRate)
     decoderOptimizer = optim.SGD(decoder.parameters(), lr=learningRate)
 
-    # 选择损失函数
+    # 损失函数：NLL
     criterion = nn.NLLLoss()
 
     # 根据设置迭代步进行循环
@@ -496,18 +492,15 @@ def trainIters(srcLang, targetLang, encoder, decoder, nIters, printEvery=1000, p
     # 绘制损失曲线
     plt.figure()
     plt.plot(plotLosses)
-    # 保存到指定路径
     plt.savefig("./s2s_loss.png")
 
-srcLang, targetLang, pairs = prepareData(TEST_SRC, TEST_TARGET)
+srcLangTrain, targetLangTrain, pairs = prepareData(TRAIN_SRC, TRAIN_TARGET)
 hiddenSize = 256
-encoder = EncoderRNN(srcLang.n_words, hiddenSize)
-attnDecoder = AttentionDecoderRNN(hiddenSize, targetLang.n_words, dropoutP=0.1)
-# 设置迭代步数
+encoder = EncoderRNN(srcLangTrain.n_words, hiddenSize)
+attnDecoder = AttentionDecoderRNN(hiddenSize, targetLangTrain.n_words, dropoutP=0.1)
 nIters = 75000
-# 设置日志打印间隔
 printEvery = 1000
-trainIters(targetLang, encoder, attnDecoder, nIters, printEvery=printEvery)
+trainIters(srcLangTrain, targetLangTrain, encoder, attnDecoder, nIters, printEvery=printEvery)
 
 # ----------------------------- 构建模型训练函数, 并进行训练 END -----------------------------
 
@@ -521,7 +514,7 @@ def evaluate(srcLang, targetLang, encoder, decoder, sentence, maxLength=MAX_LENG
     # 评估阶段不进行梯度计算
     with torch.no_grad():
         # 对输入的句子进行张量表示
-        inputTensor = tensorFromSentence(srcLang, sentence)
+        inputTensor = tensorFromSentence(srcLang, sentence, 'en')
         # 获得输入的句子长度
         inputLength = inputTensor.size()[0]
         # 初始化编码器隐层张量
@@ -571,7 +564,7 @@ def evaluate(srcLang, targetLang, encoder, decoder, sentence, maxLength=MAX_LENG
 # encoder, decoder: 编码器和解码器对象
 # n: 测试数
 # 随机选择指定数量的数据进行评估
-def evaluateRandomly(encoder, decoder, n=6):
+def evaluateRandomly(srcLang, targetLang, encoder, decoder, n=6):
     # 对测试数进行循环
     for i in range(n):
         # 从pairs随机选择语言对
@@ -581,19 +574,22 @@ def evaluateRandomly(encoder, decoder, n=6):
         # = 代表正确的输出
         print('=', pair[1])
         # 调用evaluate进行预测
-        outputWords, attentions = evaluate(encoder, decoder, pair[0])
+        outputWords, attentions = evaluate(srcLang, targetLang, encoder, decoder, pair[0])
         # 将结果连成句子
         outputSentence = ' '.join(outputWords)
         # < 代表模型的输出
         print('<', outputSentence)
         print('')
 
-evaluateRandomly(encoder, attnDecoder)
-sentence = "we re both teachers ."
-# 调用评估函数
-output_words, attentions = evaluate(encoder, attnDecoder, sentence)
+srcLangValidation, targetLangValidation, pairs = prepareData(VALIDATION_SRC, VALIDATION_TARGET)
+sentence = "we re both teachers."
+hiddenSize = 256
+encoder = EncoderRNN(srcLangValidation.n_words, hiddenSize)
+attnDecoder = AttentionDecoderRNN(hiddenSize, targetLangValidation.n_words, dropoutP=0.1)
+evaluateRandomly(srcLangValidation, targetLangValidation, encoder, attnDecoder)
+output_words, attentions = evaluate(srcLangValidation, targetLangValidation, encoder, attnDecoder, sentence)
 print(output_words)
-plt.matshow(attentions.numpy())
+plt.matshow(attentions.numpy().T)
 plt.savefig("./s2s_attn.png")
 
 # ----------------------------- 构建模型评估函数, 并进行测试以及Attention效果分析 END -----------------------------
