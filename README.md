@@ -1,36 +1,98 @@
-# 根据attention的QKV理论，attention的输入参数为三个Q，K，V，
-        # 第一步，使用Q与K进行attention权值计算得到权重矩阵, 再与V做矩阵乘法, 得到V的注意力表示结果.
-        # 这里常见的计算方式有三种:
-        # 1，将Q，K进行纵轴拼接, 做一次线性变化, 再使用softmax处理获得结果最后与V做张量乘法
-        # 2，将Q，K进行纵轴拼接, 做一次线性变化后再使用tanh函数激活, 然后再进行内部求和, 最后使用softmax处理获得结果再与V做张量乘法
-        # 3，将Q与K的转置做点积运算, 然后除以一个缩放系数, 再使用softmax处理获得结果最后与V做张量乘法
+### 代码解释
 
-        # 说明：当注意力权重矩阵和V都是三维张量且第一维代表为batch条数时, 则做bmm运算.
+这段代码是一个用于训练的函数，用于训练编码器-解码器模型。下面是对代码的解释：
 
-        # 第二步, 根据第一步采用的计算方法, 如果是拼接方法，则需要将Q与第二步的计算结果再进行拼接,
-        # 如果是转置点积, 一般是自注意力, Q与V相同, 则不需要进行与Q的拼接.因此第二步的计算方式与第一步采用的全值计算方法有关.
-        # 第三步，最后为了使整个attention结构按照指定尺寸输出, 使用线性层作用在第二步的结果上做一个线性变换. 得到最终对Q的注意力表示.
+1. 首先，初始化编码器的隐层张量和优化器的梯度。
 
-        # 我们这里使用的是第一步中的第一种计算方式, 因此需要一个线性变换的矩阵, 实例化nn.Linear
-        # 因为它的输入是Q，K的拼接, 所以输入的第一个参数是self.hidden_size * 2，第二个参数是self.max_length
-        # 这里的Q是解码器的Embedding层的输出, K是解码器GRU的隐层输出，因为首次隐层还没有任何输出，会使用编码器的隐层输出
-        # 而这里的V是编码器层的输出
+```python
+encoderHidden = encoder.initHidden()
+encoderOptimizer.zero_grad()
+decoderOptimizer.zero_grad()
+```
 
-什么是teacher_forcing?
-它是一种用于序列生成任务的训练技巧, 在seq2seq架构中, 根据循环神经网络理论，
-解码器每次应该使用上一步的结果作为输入的一部分, 但是训练过程中，一旦上一步的结果是错误的，
-就会导致这种错误被累积，无法达到训练效果, 因此，我们需要一种机制改变上一步出错的情况，
-因为训练时我们是已知正确的输出应该是什么，因此可以强制将上一步结果设置成正确的输出, 
-这种方式就叫做teacher_forcing.
+2. 获取输入张量和目标张量的长度。
 
+```python
+inputLength = inputTensor.size(0)
+targetLength = targetTensor.size(0)
+```
 
-teacher_forcing的作用:
-能够在训练的时候矫正模型的预测，避免在序列生成的过程中误差进一步放大.
-teacher_forcing能够极大的加快模型的收敛速度，令模型训练过程更快更平稳.
+3. 初始化编码器的输出张量。
 
-seq2seq模型架构分析:
-从图中可知, seq2seq模型架构, 包括两部分分别是encoder(编码器)和decoder(解码器), 
-编码器和解码器的内部实现都使用了GRU模型, 这里它要完成的是一个中文到英文的翻译: 
-欢迎 来 北京 --> welcome to BeiJing. 编码器首先处理中文输入"欢迎 来 北京", 
-通过GRU模型获得每个时间步的输出张量，最后将它们拼接成一个中间语义张量c, 
-接着解码器将使用这个中间语义张量c以及每一个时间步的隐层张量, 逐个生成对应的翻译语言.
+```python
+encoderOutputs = torch.zeros(maxLength, encoder.hiddenSize)
+```
+
+4. 初始化损失为0。
+
+```python
+loss = 0
+```
+
+5. 对输入张量进行循环遍历，将每个单词的张量表示和隐层张量传入编码器，获得编码器的输出和隐层张量。
+
+```python
+for ei in range(inputLength):
+    encoderOutput, encoderHidden = encoder(inputTensor[ei], encoderHidden)
+    encoderOutputs[ei] = encoderOutput[0, 0]
+```
+
+6. 初始化解码器的第一个输入为起始符。
+
+```python
+decoderInput = torch.tensor([[SOS_TOKEN]])
+```
+
+7. 初始化解码器的隐层张量为编码器的隐层输出。
+
+```python
+decoderHidden = encoderHidden
+```
+
+8. 根据是否使用teacher forcing进行不同的处理。
+
+```python
+useTeacherForcing = True if random.random() < TEACHER_FORCING_RATIO else False
+
+if useTeacherForcing:
+    # 使用teacher forcing
+else:
+    # 不使用teacher forcing
+```
+
+9. 如果使用teacher forcing，则循环遍历目标张量，将解码器的输入、隐层张量和编码器的输出传入解码器，获得解码器的输出、隐层张量和注意力权重。计算损失时，只使用目标张量来计算损失，并将下一次的解码器输入设置为目标张量。
+
+```python
+for di in range(targetLength):
+    decoderOutput, decoderHidden, decoderAttention = decoder(decoderInput, decoderHidden, encoderOutputs)
+    loss += criterion(decoderOutput, targetTensor[di])
+    decoderInput = targetTensor[di]
+```
+
+10. 如果不使用teacher forcing，则循环遍历目标张量，将解码器的输入、隐层张量和编码器的输出传入解码器，获得解码器的输出、隐层张量和注意力权重。计算损失时，使用解码器的输出和目标张量来计算损失。如果输出值是终止符，则停止循环；否则，将输出值作为下一次的解码器输入。
+
+```python
+for di in range(targetLength):
+    decoderOutput, decoderHidden, decoderAttention = decoder(decoderInput, decoderHidden, encoderOutputs)
+    loss += criterion(decoderOutput, targetTensor[di])
+    topv, topi = decoderOutput.topk(1)
+    if topi.squeeze().item() == EOS_TOKEN:
+        break
+    decoderInput = topi.squeeze().detach()
+```
+
+11. 反向传播误差，并更新编码器和解码器的参数。
+
+```python
+loss.backward()
+encoderOptimizer.step()
+decoderOptimizer.step()
+```
+
+12. 返回平均损失。
+
+```python
+return loss.item() / targetLength
+```
+
+这段代码的作用是训练编码器-解码器模型，通过输入张量和目标张量，使用编码器和解码器进行训练，并计算损失。其中，如果使用teacher forcing，则将目标张量作为解码器的输入；如果不使用teacher forcing，则将解码器的输出作为下一次的输入。最后返回平均损失。

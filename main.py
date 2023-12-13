@@ -434,7 +434,7 @@ def timeSince(since):
 # plotEvery: 绘制损失曲线间隔
 # learningRate: 学习率
 # 训练迭代函数
-def trainIters(srcLang, targetLang, encoder, decoder, nIters, printEvery=1000, plotEvery=100, learningRate=0.01):
+def trainIters(srcLang, targetLang, pairs, encoder, decoder, nIters, printEvery=1000, plotEvery=100, learningRate=0.01):
 
     # 获得训练开始时间戳
     start = time.time()
@@ -492,15 +492,15 @@ def trainIters(srcLang, targetLang, encoder, decoder, nIters, printEvery=1000, p
     # 绘制损失曲线
     plt.figure()
     plt.plot(plotLosses)
-    plt.savefig("./s2s_loss.png")
+    plt.savefig("./seq2seqLoss.png")
 
-srcLangTrain, targetLangTrain, pairs = prepareData(TRAIN_SRC, TRAIN_TARGET)
+srcLangTrain, targetLangTrain, pairsTrain = prepareData(TRAIN_SRC, TRAIN_TARGET)
 hiddenSize = 256
 encoder = EncoderRNN(srcLangTrain.n_words, hiddenSize)
-attnDecoder = AttentionDecoderRNN(hiddenSize, targetLangTrain.n_words, dropoutP=0.1)
+attentionDecoder = AttentionDecoderRNN(hiddenSize, targetLangTrain.n_words, dropoutP=0.1)
 nIters = 75000
 printEvery = 1000
-trainIters(srcLangTrain, targetLangTrain, encoder, attnDecoder, nIters, printEvery=printEvery)
+trainIters(srcLangTrain, targetLangTrain, pairsTrain, encoder, attentionDecoder, nIters, printEvery=printEvery)
 
 # ----------------------------- 构建模型训练函数, 并进行训练 END -----------------------------
 
@@ -510,16 +510,16 @@ trainIters(srcLangTrain, targetLangTrain, encoder, attnDecoder, nIters, printEve
 # sentence: 需要评估的句子
 # maxLength: 句子的最大长度
 # 评估函数
-def evaluate(srcLang, targetLang, encoder, decoder, sentence, maxLength=MAX_LENGTH):
-    # 评估阶段不进行梯度计算
+def validatePerSentence(srcLang, targetLang, encoder, decoder, sentence, maxLength=MAX_LENGTH):
+    # 不进行梯度计算
     with torch.no_grad():
-        # 对输入的句子进行张量表示
+        # 获取输入张量
         inputTensor = tensorFromSentence(srcLang, sentence, 'en')
-        # 获得输入的句子长度
+        # 获得句子长度
         inputLength = inputTensor.size()[0]
         # 初始化编码器隐层张量
         encoderHidden = encoder.initHidden()
-        # 初始化编码器输出张量，是maxLength x encoder.hiddenSize的0张量
+        # 初始化编码器输出张量
         encoderOutputs = torch.zeros(maxLength, encoder.hiddenSize)
         # 循环遍历输入张量索引
         for ei in range(inputLength):
@@ -564,32 +564,19 @@ def evaluate(srcLang, targetLang, encoder, decoder, sentence, maxLength=MAX_LENG
 # encoder, decoder: 编码器和解码器对象
 # n: 测试数
 # 随机选择指定数量的数据进行评估
-def evaluateRandomly(srcLang, targetLang, encoder, decoder, n=6):
-    # 对测试数进行循环
+def validate(srcLang, targetLang, pairs, encoder, decoder, n=10):
     for i in range(n):
-        # 从pairs随机选择语言对
         pair = random.choice(pairs)
-        # > 代表输入
-        print('>', pair[0])
-        # = 代表正确的输出
-        print('=', pair[1])
-        # 调用evaluate进行预测
-        outputWords, attentions = evaluate(srcLang, targetLang, encoder, decoder, pair[0])
-        # 将结果连成句子
+        outputWords, attentions = validatePerSentence(srcLang, targetLang, encoder, decoder, pair[0])
         outputSentence = ' '.join(outputWords)
-        # < 代表模型的输出
-        print('<', outputSentence)
+        print('[',i,']','输入：', pair[0])
+        print('[',i,']','目标输出：', pair[1])
+        print('[',i,']','模型输出：', outputSentence)
         print('')
 
-srcLangValidation, targetLangValidation, pairs = prepareData(VALIDATION_SRC, VALIDATION_TARGET)
-sentence = "we re both teachers."
-hiddenSize = 256
-encoder = EncoderRNN(srcLangValidation.n_words, hiddenSize)
-attnDecoder = AttentionDecoderRNN(hiddenSize, targetLangValidation.n_words, dropoutP=0.1)
-evaluateRandomly(srcLangValidation, targetLangValidation, encoder, attnDecoder)
-output_words, attentions = evaluate(srcLangValidation, targetLangValidation, encoder, attnDecoder, sentence)
-print(output_words)
-plt.matshow(attentions.numpy().T)
-plt.savefig("./s2s_attn.png")
+srcLangValidation, targetLangValidation, pairsValidation = prepareData(VALIDATION_SRC, VALIDATION_TARGET)
+print(targetLangValidation.index2word)
+srcLangTest, targetLangTest, pairsTest = prepareData(TEST_SRC, TEST_TARGET)
+validate(srcLangValidation, targetLangValidation, pairsValidation, encoder, attentionDecoder)
 
 # ----------------------------- 构建模型评估函数, 并进行测试以及Attention效果分析 END -----------------------------
