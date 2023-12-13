@@ -573,10 +573,11 @@ def validate(srcLang, targetLang, pairs, encoder, decoder, n):
         print('[',i,']','目标输出：', pair[1])
         print('[',i,']','模型输出：', outputSentence)
         print('')
-
+        plt.matshow(attentions.numpy())
+        plt.savefig(f"./seq2seqAttention{i}.png")
 srcLangValidation, targetLangValidation, pairsValidation = prepareData(VALIDATION_SRC, VALIDATION_TARGET)
 # srcLangTest, targetLangTest, pairsTest = prepareData(TEST_SRC, TEST_TARGET)
-print(srcLangValidation, targetLangValidation, pairsValidation)
+# print(srcLangValidation, targetLangValidation, pairsValidation)
 encoderValidate = EncoderRNN(srcLangValidation.n_words, hiddenSize)
 attentionDecoderValidate = AttentionDecoderRNN(hiddenSize, targetLangValidation.n_words, dropoutP=0.1)
 validate(srcLangValidation, targetLangValidation, pairsValidation, encoderValidate, attentionDecoderValidate, len(pairsValidation))
