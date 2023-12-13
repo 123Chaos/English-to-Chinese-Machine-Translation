@@ -500,7 +500,7 @@ encoder = EncoderRNN(srcLangTrain.n_words, hiddenSize)
 attentionDecoder = AttentionDecoderRNN(hiddenSize, targetLangTrain.n_words, dropoutP=0.1)
 nIters = 75000
 printEvery = 1000
-trainIters(srcLangTrain, targetLangTrain, pairsTrain, encoder, attentionDecoder, nIters, printEvery=printEvery)
+# trainIters(srcLangTrain, targetLangTrain, pairsTrain, encoder, attentionDecoder, nIters, printEvery=printEvery)
 
 # ----------------------------- 构建模型训练函数, 并进行训练 END -----------------------------
 
@@ -564,7 +564,7 @@ def validatePerSentence(srcLang, targetLang, encoder, decoder, sentence, maxLeng
 # encoder, decoder: 编码器和解码器对象
 # n: 测试数
 # 随机选择指定数量的数据进行评估
-def validate(srcLang, targetLang, pairs, encoder, decoder, n=10):
+def validate(srcLang, targetLang, pairs, encoder, decoder, n):
     for i in range(n):
         pair = random.choice(pairs)
         outputWords, attentions = validatePerSentence(srcLang, targetLang, encoder, decoder, pair[0])
@@ -575,8 +575,10 @@ def validate(srcLang, targetLang, pairs, encoder, decoder, n=10):
         print('')
 
 srcLangValidation, targetLangValidation, pairsValidation = prepareData(VALIDATION_SRC, VALIDATION_TARGET)
-print(targetLangValidation.index2word)
-srcLangTest, targetLangTest, pairsTest = prepareData(TEST_SRC, TEST_TARGET)
-validate(srcLangValidation, targetLangValidation, pairsValidation, encoder, attentionDecoder)
+# srcLangTest, targetLangTest, pairsTest = prepareData(TEST_SRC, TEST_TARGET)
+print(srcLangValidation, targetLangValidation, pairsValidation)
+encoderValidate = EncoderRNN(srcLangValidation.n_words, hiddenSize)
+attentionDecoderValidate = AttentionDecoderRNN(hiddenSize, targetLangValidation.n_words, dropoutP=0.1)
+validate(srcLangValidation, targetLangValidation, pairsValidation, encoderValidate, attentionDecoderValidate, len(pairsValidation))
 
 # ----------------------------- 构建模型评估函数, 并进行测试以及Attention效果分析 END -----------------------------
