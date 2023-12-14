@@ -38,7 +38,7 @@ MAX_LENGTH = 10
 EN_PREFIX = ("i am ", "i m ", "he is", "he s ", "she is", "she s ", "you are", "you re ", "we are", "we re ", "they are", "they re ")
 
 # 设置TEACHER_FORCING比率
-TEACHER_FORCING_RATIO = 0.5
+TEACHER_FORCING_RATIO = 0.2
 
 class Lang:
     def __init__(self, languageName):
@@ -500,7 +500,7 @@ encoder = EncoderRNN(srcLangTrain.n_words, hiddenSize)
 attentionDecoder = AttentionDecoderRNN(hiddenSize, targetLangTrain.n_words, dropoutP=0.1)
 nIters = 75000
 printEvery = 1000
-# trainIters(srcLangTrain, targetLangTrain, pairsTrain, encoder, attentionDecoder, nIters, printEvery=printEvery)
+trainIters(srcLangTrain, targetLangTrain, pairsTrain, encoder, attentionDecoder, nIters, printEvery=printEvery)
 
 # ----------------------------- 构建模型训练函数, 并进行训练 END -----------------------------
 
